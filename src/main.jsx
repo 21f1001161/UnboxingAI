@@ -1,51 +1,178 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import './login.css';
-import { LearningDashboard, ResearchHub, Settings } from './product-features';
+import './digest.css';
+import { LEVELS } from './components.jsx';
+import { DigestProvider, useDigest } from './store.jsx';
+import { Timeline } from './timeline.jsx';
+import { Article } from './article.jsx';
+import { LearningDashboard, ResearchHub, Settings } from './product-features.jsx';
 
-const stories = [
-  { date: 'AUG 08', tag: 'MODELS', title: 'AI agents are learning to use a computer', deck: 'The next generation of models can now plan, click, and complete multi-step tasks—bringing useful autonomy closer to the desktop.', sources: ['Anthropic', 'The Verge', 'MIT Tech Review'], mins: '6 min', color: 'violet', new: true },
-  { date: 'AUG 06', tag: 'RESEARCH', title: 'Why small models are having a big moment', deck: 'Efficient, specialized models are making sophisticated AI cheaper, faster, and easier to run privately.', sources: ['Hugging Face', 'arXiv', 'Google AI'], mins: '8 min', color: 'coral' },
-  { date: 'AUG 03', tag: 'POLICY', title: 'Europe’s AI rules move from paper to practice', deck: 'New obligations are arriving for companies that build and deploy high-risk AI systems.', sources: ['EU Commission', 'Reuters', 'FT'], mins: '5 min', color: 'lime' },
+const NAV = [
+  ['timeline', '◌', 'AI timeline'],
+  ['research', '⌘', 'In-depth research'],
+  ['dashboard', '□', 'My learning'],
+  ['settings', '⚙', 'Settings'],
 ];
-window.unboxingStories = stories;
 
-function App() {
-  const [user, setUser] = useState(undefined);
+/** Per-user localStorage list, tolerant of anything an older build left behind. */
+function useStoredList(key) {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    if (!key) return setItems([]);
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+      setItems(Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string') : []);
+    } catch {
+      setItems([]);
+    }
+  }, [key]);
+
+  const toggle = useCallback(id => setItems(current => {
+    const next = current.includes(id) ? current.filter(item => item !== id) : [...current, id];
+    if (key) localStorage.setItem(key, JSON.stringify(next));
+    return next;
+  }), [key]);
+
+  return [items, toggle];
+}
+
+function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
+  const { stories } = useDigest();
   const [page, setPage] = useState('timeline');
-  const [level, setLevel] = useState(null);
-  const [saved, setSaved] = useState([stories[1].title, 'A practical guide to retrieval-augmented generation']);
-  const [selected, setSelected] = useState(null);
-  const [showLevel, setShowLevel] = useState(false);
-  useEffect(() => { fetch('/api/auth/me').then(r => r.json()).then(({user}) => { setUser(user); if (user) setLevel(localStorage.getItem(`unboxing-ai-level-${user.id}`)); }).catch(() => setUser(null)); }, []);
-  const toggleSave = title => setSaved(s => s.includes(title) ? s.filter(x => x !== title) : [...s, title]);
-  const chooseLevel = choice => { setLevel(choice); localStorage.setItem(`unboxing-ai-level-${user.id}`, choice); setShowLevel(false); };
-  const nav = [['timeline','◌','AI timeline'],['research','⌘','In-depth research'],['dashboard','□','My learning'],['settings','⚙','Settings']];
-  if (user === undefined) return <div className="loading">Loading your learning space…</div>;
-  if (!user) return <LoginScreen />;
-  if (!level) return <LevelModal level={level} setLevel={chooseLevel} close={() => {}} forced />;
+  const [selectedId, setSelectedId] = useState(null);
+  const [focusId, setFocusId] = useState(null);
+  const [saved, toggleSave] = useStoredList(`unboxing-ai-saved-${user.id}`);
+  const [playlist, togglePlaylist] = useStoredList(`unboxing-ai-playlist-${user.id}`);
+
+  const selected = useMemo(() => stories.find(story => story.id === selectedId) || null, [stories, selectedId]);
+
+  // Opening a story from anywhere goes through one place, so the research tab,
+  // the timeline, and the learning queue all behave identically.
+  const openStory = useCallback(id => setSelectedId(id), []);
+  const explore = useCallback(id => { setFocusId(id); setSelectedId(null); setPage('research'); }, []);
+
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const onKey = event => event.key === 'Escape' && setSelectedId(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]);
+
+  const shared = { level, saved, toggleSave, open: openStory, explore };
+
   return <div className="app">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark">U</span><span>unboxing<span>AI</span></span></div>
       <div className="nav-label">EXPLORE</div>
-      <nav>{nav.map(([id, icon, label]) => <button key={id} onClick={()=>setPage(id)} className={page===id?'active':''}><i>{icon}</i>{label}{id==='dashboard' && saved.length>0 && <b>{saved.length}</b>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="tip"><span>✦</span><p><strong>Make it yours</strong>Choose how deeply you want to learn.</p><button onClick={()=>setShowLevel(true)}>Adjust level →</button></div><button className="profile"><span>{user.name?.split(' ').map(x=>x[0]).slice(0,2).join('')}</span><div><strong>{user.name}</strong><small>{level} learner</small></div><em>⌄</em></button></div>
+      <nav>
+        {NAV.map(([id, icon, label]) => <button key={id} onClick={() => setPage(id)} className={page === id ? 'active' : ''}>
+          <i>{icon}</i>{label}{id === 'dashboard' && saved.length > 0 && <b>{saved.length}</b>}
+        </button>)}
+      </nav>
+      <div className="sidebar-bottom">
+        <div className="tip">
+          <span>✦</span>
+          <p><strong>Make it yours</strong>Choose how deeply you want to learn.</p>
+          <button onClick={openLevelPicker}>Adjust level →</button>
+        </div>
+        <button className="profile">
+          <span>{user.name?.split(' ').map(part => part[0]).slice(0, 2).join('')}</span>
+          <div><strong>{user.name}</strong><small>{level} learner</small></div>
+          <em>⌄</em>
+        </button>
+      </div>
     </aside>
-    <main>{page==='timeline' && <Timeline level={level} saved={saved} toggleSave={toggleSave} open={setSelected} />}{page==='research' && <ResearchHub saved={saved} toggleSave={toggleSave} open={setSelected} />}{page==='dashboard' && <LearningDashboard saved={saved} toggleSave={toggleSave} open={setSelected} />}{page==='settings' && <Settings user={user} level={level} changeLevel={()=>setShowLevel(true)} signOut={async()=>{await fetch('/api/auth/logout',{method:'POST'}); localStorage.removeItem(`unboxing-ai-level-${user.id}`); setUser(null); setLevel(null);}} />}</main>
-    {selected && <Article story={selected} level={level} close={()=>setSelected(null)} saved={saved} toggleSave={toggleSave}/>} 
-    {showLevel && <LevelModal level={level} setLevel={chooseLevel} close={()=>setShowLevel(false)}/>} 
-  </div>
+
+    <main>
+      {page === 'timeline' && <Timeline {...shared} openLevelPicker={openLevelPicker} />}
+      {page === 'research' && <ResearchHub {...shared} focusId={focusId} setFocusId={setFocusId} />}
+      {page === 'dashboard' && <LearningDashboard {...shared} playlist={playlist} togglePlaylist={togglePlaylist} />}
+      {page === 'settings' && <Settings user={user} level={level} changeLevel={openLevelPicker} signOut={signOut} />}
+    </main>
+
+    {selected && <Article
+      story={selected}
+      level={level}
+      setLevel={setLevel}
+      close={() => setSelectedId(null)}
+      saved={saved}
+      toggleSave={toggleSave}
+      openStory={openStory}
+      explore={explore}
+    />}
+  </div>;
 }
 
-function LoginScreen() { return <div className="login-page"><div className="login-panel"><div className="brand"><span className="brand-mark">U</span><span>unboxing<span>AI</span></span></div><div className="login-copy"><p className="eyebrow">YOUR AI LEARNING COMPANION</p><h1>The AI world,<br/><i>unboxed.</i></h1><p>One story, multiple trusted sources, explained at your level.</p><a className="google-button" href="/api/auth/google"><span className="google-g">G</span>Continue with Google</a><small>By continuing, you agree to start a personal learning space.</small></div><div className="login-art"><span>✦</span><div className="orbit one"></div><div className="orbit two"></div><div className="orbit three"></div><b>AI<br/>made<br/>clear</b></div></div></div> }
+function App() {
+  const [user, setUser] = useState(undefined);
+  const [level, setLevelState] = useState(null);
+  const [showLevel, setShowLevel] = useState(false);
 
-function Timeline({level,saved,toggleSave,open}) { return <><header><div><p className="eyebrow">WEEK OF AUGUST 5 — 11</p><h1>The AI world,<br/><i>unboxed.</i></h1></div><div className="header-actions"><button className="round">⌕</button><button className="level-chip" onClick={()=>document.querySelector('.tip button').click()}>{level}<span>⌄</span></button></div></header><section className="intro"><span className="spark">✦</span><p>Three stories shaping how AI is built, used, and understood this week.</p><button>View as daily <span>→</span></button></section><section className="feed"><div className="line"></div>{stories.map((story,i)=><article className="story" key={story.title}><div className="date"><span>{story.date}</span>{story.new&&<b>NEW</b>}</div><div className={`story-orb ${story.color}`}><span>{i===0?'✦':i===1?'◒':'⌁'}</span></div><div className="story-body"><div className="story-top"><span className="tag">{story.tag}</span><span className="read">{story.mins} read</span></div><h2>{story.title}</h2><p>{story.deck}</p><div className="sources"><span>ONE STORY · {story.sources.length} SOURCES</span>{story.sources.map(s=><a key={s}>{s}</a>)}</div><div className="story-actions"><button onClick={()=>open(story)}>Unbox this story <span>→</span></button><button onClick={()=>toggleSave(story.title)} className={saved.includes(story.title)?'saved':''}>{saved.includes(story.title)?'★ Saved':'☆ Save'}</button></div></div></article>)}</section></> }
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(response => response.json())
+      .then(({ user: me }) => {
+        setUser(me);
+        if (me) setLevelState(localStorage.getItem(`unboxing-ai-level-${me.id}`));
+      })
+      .catch(() => setUser(null));
+  }, []);
 
-function Research({level,saved,toggleSave}) { const topics=['AI agents','Large language models','Open-source AI','AI regulation','Generative video']; return <><header><div><p className="eyebrow">GO DEEPER</p><h1>Research without<br/><i>the rabbit hole.</i></h1></div><button className="level-chip">{level}<span>⌄</span></button></header><div className="research-layout"><section><div className="search"><span>⌕</span><input placeholder="Search a concept, company, or paper…"/></div><p className="section-title">START WITH A CONCEPT</p><div className="concepts">{topics.map((t,i)=><button key={t} className={'concept c'+i}><span>{['↗','◎','◈','§','▷'][i]}</span>{t}<em>→</em></button>)}</div></section><aside className="featured"><p className="eyebrow">CURATED FOR YOU</p><div className="paper-art"><span>neural<br/>networks</span><i></i><b>01</b></div><span className="tag">FOUNDATIONS</span><h2>What is a neural network, really?</h2><p>A visual-first explanation of the technology underneath today’s AI.</p><div><button onClick={()=>toggleSave('What is a neural network, really?')} className={saved.includes('What is a neural network, really.')?'saved':''}>☆ Save for later</button><button>Read story →</button></div></aside></div></> }
+  const setLevel = useCallback(choice => {
+    if (!LEVELS.includes(choice)) return;
+    setLevelState(choice);
+    if (user) localStorage.setItem(`unboxing-ai-level-${user.id}`, choice);
+    setShowLevel(false);
+  }, [user]);
 
-function Dashboard({saved,open}) { return <><header><div><p className="eyebrow">YOUR SPACE</p><h1>Keep your curiosity<br/><i>in motion.</i></h1></div><button className="round">⋯</button></header><div className="dashboard"><section className="queue"><div className="section-heading"><div><p className="eyebrow">LEARNING QUEUE</p><h2>Saved for your next session</h2></div><span>{saved.length} items</span></div>{saved.length ? saved.map((x,i)=><button className="queue-item" key={x} onClick={()=>open(stories.find(s=>s.title===x)||{title:x,tag:'FOUNDATIONS',mins:'7 min',sources:['Unboxing AI']})}><span className={'num n'+i}>0{i+1}</span><div><small>{i===0?'SAVED YESTERDAY':'SAVED AUG 06'}</small><strong>{x}</strong><p>Continue learning <em>→</em></p></div><i>⋮</i></button>) : <div className="empty">Your queue is clear. Save a story to return to it later.</div>}</section><aside className="nudge"><span>✦</span><p className="eyebrow">WEEKLY NUDGE</p><h2>A small moment of learning goes a long way.</h2><p>Every Sunday, we’ll send a gentle recap of stories still waiting for you.</p><div className="toggle"><b></b><span>Weekly learning reminder</span></div></aside></div></> }
+  const signOut = useCallback(async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    localStorage.removeItem(`unboxing-ai-level-${user.id}`);
+    setUser(null);
+    setLevelState(null);
+  }, [user]);
 
-function Article({story,level,close,saved,toggleSave}) { const copy=level==='Beginner'?'Think of an AI agent as a very capable assistant at a computer. Instead of only answering a question, it can break a task into steps and use tools—like a browser or spreadsheet—to complete them.':'AI agents combine a language model with planning, memory, and tool-use loops. They decide which action to take, observe the outcome, then refine their next move.'; return <div className="overlay"><article className="article-modal"><button className="close" onClick={close}>×</button><span className="tag">{story.tag}</span><p className="eyebrow">ONE STORY · {story.sources?.length||1} SOURCES</p><h1>{story.title}</h1><div className="article-meta"><span>◷ {story.mins}</span><span>Adjusted for <b>{level}</b></span><button onClick={()=>toggleSave(story.title)}>{saved.includes(story.title)?'★ Saved':'☆ Save'}</button></div><div className="article-copy"><p className="lead">{story.deck || 'An approachable overview that connects the important ideas without the noise.'}</p><h2>The short version</h2><p>{copy}</p><div className="plain"><span>✦</span><div><strong>In plain language</strong><p>Models are moving beyond chat: they are beginning to take useful actions on our behalf.</p></div></div><h2>Follow the thread</h2><div className="source-list">{(story.sources||[]).map((s,i)=><a key={s}><span>0{i+1}</span>{s}<em>Read source ↗</em></a>)}</div></div></article></div> }
-function LevelModal({level,setLevel,close,forced=false}) { return <div className="overlay"><div className="level-modal"><button className="close" onClick={close} style={{display: forced ? 'none' : undefined}}>×</button><span className="spark">✦</span><p className="eyebrow">{forced ? 'WELCOME TO UNBOXING AI' : 'YOUR LEARNING LENS'}</p><h2>How would you like<br/>AI explained?</h2><p>We’ll adapt every story to meet you where you are. You can change this later.</p>{['Beginner','Intermediate','Expert'].map((x,i)=><button key={x} onClick={()=>setLevel(x)} className={level===x?'chosen':''}><span>{['◇','◈','✦'][i]}</span><div><strong>{x}</strong><small>{i===0?'Clear, jargon-free foundations':i===1?'Helpful context and connections':'Technical depth and source detail'}</small></div><em>{level===x?'✓':'→'}</em></button>)}</div></div> }
+  if (user === undefined) return <div className="loading">Loading your learning space…</div>;
+  if (!user) return <LoginScreen />;
+  if (!level) return <LevelModal level={level} setLevel={setLevel} close={() => {}} forced />;
+
+  return <DigestProvider level={level}>
+    <Workspace user={user} level={level} setLevel={setLevel} openLevelPicker={() => setShowLevel(true)} signOut={signOut} />
+    {showLevel && <LevelModal level={level} setLevel={setLevel} close={() => setShowLevel(false)} />}
+  </DigestProvider>;
+}
+
+function LoginScreen() {
+  return <div className="login-page"><div className="login-panel">
+    <div className="brand"><span className="brand-mark">U</span><span>unboxing<span>AI</span></span></div>
+    <div className="login-copy">
+      <p className="eyebrow">YOUR AI LEARNING COMPANION</p>
+      <h1>The AI world,<br /><i>unboxed.</i></h1>
+      <p>One story, multiple trusted sources, explained at your level.</p>
+      <a className="google-button" href="/api/auth/google"><span className="google-g">G</span>Continue with Google</a>
+      <small>By continuing, you agree to start a personal learning space.</small>
+    </div>
+    <div className="login-art"><span>✦</span><div className="orbit one"></div><div className="orbit two"></div><div className="orbit three"></div><b>AI<br />made<br />clear</b></div>
+  </div></div>;
+}
+
+function LevelModal({ level, setLevel, close, forced = false }) {
+  const blurbs = ['Clear, jargon-free foundations', 'Helpful context and connections', 'Technical depth and source detail'];
+  return <div className="overlay"><div className="level-modal">
+    <button className="close" onClick={close} style={{ display: forced ? 'none' : undefined }}>×</button>
+    <span className="spark">✦</span>
+    <p className="eyebrow">{forced ? 'WELCOME TO UNBOXING AI' : 'YOUR LEARNING LENS'}</p>
+    <h2>How would you like<br />AI explained?</h2>
+    <p>Every story in the timeline is rewritten for the level you choose. You can change this at any time.</p>
+    {LEVELS.map((option, index) => <button key={option} onClick={() => setLevel(option)} className={level === option ? 'chosen' : ''}>
+      <span>{['◇', '◈', '✦'][index]}</span>
+      <div><strong>{option}</strong><small>{blurbs[index]}</small></div>
+      <em>{level === option ? '✓' : '→'}</em>
+    </button>)}
+  </div></div>;
+}
+
 createRoot(document.getElementById('root')).render(<App />);

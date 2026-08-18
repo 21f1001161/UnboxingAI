@@ -5,6 +5,7 @@ import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { contentRoutes } from './server/api.js';
 
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +41,11 @@ app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile',
 app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: '/?auth=failed' }), (_req, res) => res.redirect('http://localhost:5173'));
 app.get('/api/auth/me', (req, res) => res.json({ user: req.user || null }));
 app.post('/api/auth/logout', (req, res, next) => req.logout(err => err ? next(err) : req.session.destroy(() => res.status(204).end())));
+
+app.use('/api', contentRoutes());
+
+if (!process.env.GEMINI_API_KEY) console.warn('GEMINI_API_KEY is not set. Stories will fall back to the digest summaries.');
+if (!process.env.TAVILY_API_KEY) console.warn('TAVILY_API_KEY is not set. Research will show digest sources only.');
 
 app.use(express.static(path.join(root, 'dist')));
 app.use((_req, res) => res.sendFile(path.join(root, 'dist', 'index.html')));
