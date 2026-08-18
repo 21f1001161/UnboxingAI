@@ -8,6 +8,7 @@ import { DigestProvider, useDigest } from './store.jsx';
 import { Timeline } from './timeline.jsx';
 import { Article } from './article.jsx';
 import { LearningDashboard, ResearchHub, Settings } from './product-features.jsx';
+import { LearningDashboardV2 } from './dashboard.jsx';
 
 const NAV = [
   ['timeline', '◌', 'AI timeline'],
@@ -36,22 +37,94 @@ function useStoredList(key) {
     return next;
   }), [key]);
 
-  return [items, toggle];
+  const replace = useCallback(nextItems => {
+    const next = Array.isArray(nextItems) ? nextItems.filter(item => typeof item === 'string') : [];
+    setItems(next);
+    if (key) localStorage.setItem(key, JSON.stringify(next));
+  }, [key]);
+
+  return [items, toggle, replace];
+}
+
+/** Per-user localStorage object for learning progress and notification choices. */
+function useStoredObject(key, initialValue) {
+  const [value, setValue] = useState(initialValue);
+
+  useEffect(() => {
+    if (!key) return setValue(initialValue);
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null');
+      setValue(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...initialValue, ...parsed } : initialValue);
+    } catch {
+      setValue(initialValue);
+    }
+  }, [key]);
+
+  const update = useCallback(updater => setValue(current => {
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    if (key) localStorage.setItem(key, JSON.stringify(next));
+    return next;
+  }), [key]);
+
+  return [value, update];
 }
 
 function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
   const { stories } = useDigest();
-  const [page, setPage] = useState('timeline');
+  const [page, setPage] = useState(() => new URLSearchParams(window.location.search).get('view') === 'dashboard' ? 'dashboard' : 'timeline');
   const [selectedId, setSelectedId] = useState(null);
   const [focusId, setFocusId] = useState(null);
-  const [saved, toggleSave] = useStoredList(`unboxing-ai-saved-${user.id}`);
-  const [playlist, togglePlaylist] = useStoredList(`unboxing-ai-playlist-${user.id}`);
+  const [saved, toggleSave, replaceSaved] = useStoredList(`unboxing-ai-saved-${user.id}`);
+  const [playlist, togglePlaylist, replacePlaylist] = useStoredList(`unboxing-ai-playlist-${user.id}`);
+  const [learning, setLearning] = useStoredObject(`unboxing-ai-progress-${user.id}`, {
+    read: [], completed: [], activityDays: [], notifications: true, emailNudges: false,
+  });
+  const [learningReady, setLearningReady] = useState(false);
+  const toggleSavedStory = useCallback(id => {
+    if (saved.includes(id) && playlist.includes(id)) togglePlaylist(id);
+    toggleSave(id);
+  }, [saved, playlist, toggleSave, togglePlaylist]);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/learning-state').then(response => response.ok ? response.json() : null).then(payload => {
+      if (!active) return;
+      if (payload?.state) {
+        replaceSaved(payload.state.saved);
+        replacePlaylist(payload.state.playlist);
+        setLearning(current => ({ ...current, ...payload.state }));
+      }
+    }).catch(() => {}).finally(() => active && setLearningReady(true));
+    return () => { active = false; };
+  }, [replaceSaved, replacePlaylist, setLearning]);
+
+  useEffect(() => {
+    if (!learningReady) return;
+    fetch('/api/learning-state', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ saved, playlist, ...learning }),
+    }).catch(() => {});
+  }, [saved, playlist, learning, learningReady]);
 
   const selected = useMemo(() => stories.find(story => story.id === selectedId) || null, [stories, selectedId]);
 
   // Opening a story from anywhere goes through one place, so the research tab,
   // the timeline, and the learning queue all behave identically.
-  const openStory = useCallback(id => setSelectedId(id), []);
+  const recordActivity = useCallback(updater => setLearning(current => {
+    const today = new Date().toISOString().slice(0, 10);
+    const next = updater(current);
+    return { ...next, activityDays: [...new Set([...(next.activityDays || []), today])] };
+  }), [setLearning]);
+  const openStory = useCallback(id => {
+    setSelectedId(id);
+    recordActivity(current => ({ ...current, read: [...new Set([...(current.read || []), id])] }));
+  }, [recordActivity]);
+  const markCompleted = useCallback(id => recordActivity(current => ({
+    ...current,
+    read: [...new Set([...(current.read || []), id])],
+    completed: [...new Set([...(current.completed || []), id])],
+  })), [recordActivity]);
   const explore = useCallback(id => { setFocusId(id); setSelectedId(null); setPage('research'); }, []);
 
   useEffect(() => {
@@ -61,7 +134,7 @@ function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedId]);
 
-  const shared = { level, saved, toggleSave, open: openStory, explore };
+  const shared = { level, saved, toggleSave: toggleSavedStory, open: openStory, explore };
 
   return <div className="app">
     <aside className="sidebar">
@@ -89,7 +162,7 @@ function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
     <main>
       {page === 'timeline' && <Timeline {...shared} openLevelPicker={openLevelPicker} />}
       {page === 'research' && <ResearchHub {...shared} focusId={focusId} setFocusId={setFocusId} />}
-      {page === 'dashboard' && <LearningDashboard {...shared} playlist={playlist} togglePlaylist={togglePlaylist} />}
+      {page === 'dashboard' && <LearningDashboardV2 {...shared} playlist={playlist} togglePlaylist={togglePlaylist} learning={learning} setLearning={setLearning} markCompleted={markCompleted} />}
       {page === 'settings' && <Settings user={user} level={level} changeLevel={openLevelPicker} signOut={signOut} />}
     </main>
 
@@ -99,7 +172,9 @@ function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
       setLevel={setLevel}
       close={() => setSelectedId(null)}
       saved={saved}
-      toggleSave={toggleSave}
+      toggleSave={toggleSavedStory}
+      markCompleted={markCompleted}
+      completed={learning.completed || []}
       openStory={openStory}
       explore={explore}
     />}

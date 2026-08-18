@@ -3,7 +3,21 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "scripts": { "dev": "concurrently \"node --watch server.js\" \"vite\"", "build": "vite build", "start": "node server.js" },
-  "dependencies": { "@vitejs/plugin-react": "latest", "vite": "latest", "react": "latest", "react-dom": "latest", "express": "latest", "express-session": "latest", "passport": "latest", "passport-google-oauth20": "latest", "dotenv": "latest", "concurrently": "latest" },
-  "devDependencies": {}
+  "scripts": {
+    "dev": "concurrently \"node --watch server.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-session": "latest",
+    "passport": "latest",
+    "passport-google-oauth20": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "vite": "latest"
+  }
 }

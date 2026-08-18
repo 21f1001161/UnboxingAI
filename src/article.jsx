@@ -24,13 +24,14 @@ function MoreCoverage({ story, level, onOpenStory }) {
   </>;
 }
 
-export function Article({ story: incoming, level, setLevel, close, saved, toggleSave, openStory, explore }) {
+export function Article({ story: incoming, level, setLevel, close, saved, toggleSave, openStory, explore, markCompleted, completed }) {
   const story = useLiveStory(incoming);
   const [coverageOpen, setCoverageOpen] = useState(false);
   const { status, data, error } = useExplanation(story, level);
   const explanation = data?.explanation;
   const related = story.related || [];
   const isSaved = saved.includes(story.id);
+  const isCompleted = completed.includes(story.id);
   const sourceCount = 1 + related.length;
 
   return <div className="overlay" onClick={event => event.target === event.currentTarget && close()}>
@@ -50,6 +51,9 @@ export function Article({ story: incoming, level, setLevel, close, saved, toggle
         <LevelSwitch level={level} onChange={setLevel} compact />
         <button onClick={() => toggleSave(story.id)} className={isSaved ? 'is-saved' : ''}>
           {isSaved ? '★ Saved' : '☆ Save'}
+        </button>
+        <button onClick={() => markCompleted(story.id)} className={isCompleted ? 'is-complete' : 'mark-complete'}>
+          {isCompleted ? 'Completed' : 'Mark complete'}
         </button>
       </div>
 

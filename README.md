@@ -19,6 +19,10 @@ Story content is ingested live from [El Bruno’s Weekly AI & Tech News Digest](
 - **Learning queue:** saved stories appear in **My learning** with working links — continue reading, jump to sources and topics, or open the original report. Stories that roll off the digest are shown as such rather than becoming dead links.
 - **Learning playlist:** saved stories can be independently added to or removed from a personal deep-dive playlist.
 - **Learning summary:** the dashboard shows saved stories, playlist size, queued minutes, and recap status at a glance.
+- **Learning progress:** opening a story records it as read; learners can mark it complete from the reader or dashboard. These actions update completed-post counts and the daily learning streak.
+- **Weekly recap:** the dashboard surfaces up to three saved-but-unread stories with a quick catch-up summary and a direct path to the playlist.
+- **Persistent learner state:** saved posts, playlist items, read/completed status, streak activity, and nudge preferences are stored in a server-side durable data store per Google account.
+- **Smart nudges:** learners can opt into browser alerts and weekly email recaps. A test email can be sent from My learning once Resend is configured.
 - **Weekly reminder controls:** users can enable or disable the weekly Sunday learning-recap concept.
 - **Account settings:** learners can review their Google account, change their learning level, see whether Gemini and Tavily are connected, and sign out securely.
 - **Responsive design:** the interface adjusts for desktop, tablet, and mobile screens.
@@ -81,6 +85,13 @@ TAVILY_API_KEY=your-tavily-key
 
 # Optional: point the timeline at a different weekly digest
 DIGEST_URL=https://elbruno.github.io/weekly-ai-news-digest/
+APP_URL=http://localhost:5173
+
+# Optional weekly email nudge via Resend
+RESEND_API_KEY=your-resend-key
+EMAIL_FROM=UnboxingAI <hello@your-verified-domain.com>
+NUDGE_CRON_SECRET=use-a-long-random-value
+NUDGE_HOUR_UTC=10
 ```
 
 `GEMINI_MODEL` is a fallback chain — the first model your account can reach is used.
@@ -119,6 +130,24 @@ Open [http://localhost:5173](http://localhost:5173). The command starts both ser
 7. Change the learning level at any time from the level control or sidebar prompt.
 
 The first load of a level fetches summaries for the whole digest, so give it a few seconds; everything after that is cached.
+
+## Weekly email delivery
+
+The app persists learning state in `.data/learning-state.json`. On a single long-running Express deployment, the built-in scheduler checks every hour and delivers Sunday recaps at `NUDGE_HOUR_UTC` to opted-in users who have unread saved posts. Each learner receives at most one recap per week.
+
+For serverless or multi-instance deployment, configure your platform scheduler to send a `POST` request to:
+
+```text
+/api/nudges/weekly/run
+```
+
+Include this header:
+
+```text
+Authorization: Bearer <NUDGE_CRON_SECRET>
+```
+
+Use a shared persistent volume or replace the included local store with a managed database before running multiple application instances.
 
 ## Available commands
 
