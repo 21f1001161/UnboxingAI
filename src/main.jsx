@@ -11,10 +11,10 @@ import { LearningDashboard, ResearchHub, Settings } from './product-features.jsx
 import { LearningDashboardV2 } from './dashboard.jsx';
 
 const NAV = [
-  ['timeline', '◌', 'AI timeline'],
-  ['research', '⌘', 'In-depth research'],
-  ['dashboard', '□', 'My learning'],
-  ['settings', '⚙', 'Settings'],
+  ['timeline', <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>, 'AI timeline'],
+  ['research', <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>, 'In-depth research'],
+  ['dashboard', <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" /><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>, 'My learning'],
+  ['settings', <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>, 'Settings'],
 ];
 
 /** Per-user localStorage list, tolerant of anything an older build left behind. */
@@ -135,6 +135,12 @@ function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
   }, [selectedId]);
 
   const shared = { level, saved, toggleSave: toggleSavedStory, open: openStory, explore };
+  const clearCompletedPlaylist = useCallback(() => {
+    if (!playlist.length) return;
+    const completedIds = new Set(learning.completed || []);
+    const nextPlaylist = playlist.filter(id => !completedIds.has(id));
+    replacePlaylist(nextPlaylist);
+  }, [learning.completed, playlist, replacePlaylist]);
 
   return <div className="app">
     <aside className="sidebar">
@@ -162,7 +168,7 @@ function Workspace({ user, level, setLevel, openLevelPicker, signOut }) {
     <main>
       {page === 'timeline' && <Timeline {...shared} openLevelPicker={openLevelPicker} />}
       {page === 'research' && <ResearchHub {...shared} focusId={focusId} setFocusId={setFocusId} />}
-      {page === 'dashboard' && <LearningDashboardV2 {...shared} playlist={playlist} togglePlaylist={togglePlaylist} learning={learning} setLearning={setLearning} markCompleted={markCompleted} />}
+      {page === 'dashboard' && <LearningDashboardV2 {...shared} playlist={playlist} togglePlaylist={togglePlaylist} learning={learning} setLearning={setLearning} markCompleted={markCompleted} clearCompletedPlaylist={clearCompletedPlaylist} />}
       {page === 'settings' && <Settings user={user} level={level} changeLevel={openLevelPicker} signOut={signOut} />}
     </main>
 
