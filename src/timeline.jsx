@@ -18,18 +18,20 @@ function StoryCard({ story, decksLoading, saved, toggleSave, open, explore, isNe
   const related = story.related || [];
   const sourceCount = 1 + related.length;
 
-  return <article className="story">
+  return <article className={`story${story.isResearch ? ' is-research-card' : ''}`}>
     <div className="date">
       <span>{story.dateLabel}</span>
       {isNew && <b>NEW</b>}
-      <ImportanceBadge importance={story.importance} />
+      {story.isResearch
+        ? <span className="research-badge" title="Top AI Paper of the Week">RESEARCH</span>
+        : <ImportanceBadge importance={story.importance} />}
     </div>
-    <div className={`story-orb ${story.color}`}><span>{story.glyph}</span></div>
+    <div className={`story-orb ${story.color || 'violet'}`}><span>{story.glyph || '◆'}</span></div>
     <div className="story-body">
       <div className="story-top">
-        <span className="tag">{story.category}</span>
+        <span className={`tag${story.isResearch ? ' research-tag' : ''}`}>{story.category}</span>
         <span className="read">{story.mins} min read</span>
-        <span className="rank">#{story.rank} this week</span>
+        <span className="rank">#{story.rank} {story.isResearch ? 'paper' : 'this week'}</span>
       </div>
       <h2>{story.title}</h2>
       {decksLoading && !story.deckAdapted
@@ -37,24 +39,25 @@ function StoryCard({ story, decksLoading, saved, toggleSave, open, explore, isNe
         : <p>{story.deck}</p>}
 
       <div className="sources">
-        <span>ONE STORY · {sourceCount} SOURCE{sourceCount === 1 ? '' : 'S'}</span>
+        <span>{story.isResearch ? 'RESEARCH PAPER · 2 SOURCES' : `ONE STORY · ${sourceCount} SOURCE${sourceCount === 1 ? '' : 'S'}`}</span>
         <div className="source-strip">
-          <SourceMini emoji={story.sourceEmoji} name={story.source} detail={domainOf(story.url)} url={story.url} />
-          {related.slice(0, 2).map(item => <SourceMini
+          <SourceMini emoji={story.sourceEmoji || '📄'} name={story.source} detail={domainOf(story.url)} url={story.url} />
+          {story.tweetUrl && <SourceMini emoji="💬" name="DAIR.AI Breakdown" detail="x.com" url={story.tweetUrl} />}
+          {!story.isResearch && related.slice(0, 2).map(item => <SourceMini
             key={item.id}
             emoji={item.sourceEmoji}
             name={item.source}
             detail={item.angle}
             onClick={() => open(item.id)}
           />)}
-          {related.length > 2 && <button type="button" className="source-mini more" onClick={() => explore(story.id)}>+{related.length - 2} more</button>}
+          {!story.isResearch && related.length > 2 && <button type="button" className="source-mini more" onClick={() => explore(story.id)}>+{related.length - 2} more</button>}
         </div>
       </div>
 
       <TagChips tags={story.tags} max={4} />
 
       <div className="story-actions">
-        <button onClick={() => open(story.id)}>Unbox this story <span>→</span></button>
+        <button onClick={() => open(story.id)}>{story.isResearch ? 'Unbox this paper' : 'Unbox this story'} <span>→</span></button>
         <button onClick={() => toggleSave(story.id)} className={isSaved ? 'saved' : ''}>{isSaved ? '★ Saved' : '☆ Save'}</button>
         <button onClick={() => explore(story.id)}>Go deeper</button>
       </div>
@@ -63,7 +66,7 @@ function StoryCard({ story, decksLoading, saved, toggleSave, open, explore, isNe
 }
 
 export function Timeline({ level, saved, toggleSave, open, explore, openLevelPicker }) {
-  const { status, error, reload, stories, meta, decksLoading, capabilities } = useDigest();
+  const { status, error, reload, stories, meta, decksLoading, capabilities, researchCount } = useDigest();
   const [view, setView] = useState('featured');
   const [category, setCategory] = useState('All');
   const [takeawaysOpen, setTakeawaysOpen] = useState(true);
@@ -74,11 +77,15 @@ export function Timeline({ level, saved, toggleSave, open, explore, openLevelPic
   );
 
   const visible = useMemo(() => stories
-    .filter(story => (view === 'featured' ? story.featured : true))
+    .filter(story => {
+      if (view === 'featured') return story.featured;
+      if (view === 'research') return story.isResearch;
+      return true;
+    })
     .filter(story => category === 'All' || story.category === category),
   [stories, view, category]);
 
-  // Anything from the digest's two most recent days reads as fresh.
+  // Anything from the digest's two most recent days or top week reads as fresh.
   const newestDays = useMemo(() => {
     const dates = [...new Set(stories.map(story => story.published))].sort().reverse();
     return new Set(dates.slice(0, 2));
@@ -105,7 +112,7 @@ export function Timeline({ level, saved, toggleSave, open, explore, openLevelPic
       <section className="intro">
         <span className="spark">✦</span>
         <p>
-          {stories.length} stories from <a href={meta.digestUrl} target="_blank" rel="noopener noreferrer">El Bruno&rsquo;s Weekly AI &amp; Tech News Digest</a>,
+          {stories.length} stories {researchCount > 0 ? `including ${researchCount} top AI research papers ` : ''}from <a href={meta?.digestUrl || 'https://elbruno.github.io/weekly-ai-news-digest/'} target="_blank" rel="noopener noreferrer">El Bruno&rsquo;s Digest</a> &amp; <a href="https://github.com/dair-ai/AI-Papers-of-the-Week" target="_blank" rel="noopener noreferrer">DAIR.AI</a>,
           re-explained for a <b>{level.toLowerCase()}</b> reader{capabilities.gemini ? ' by Gemini' : ''}.
         </p>
         <button onClick={() => setTakeawaysOpen(open => !open)}>
@@ -113,11 +120,12 @@ export function Timeline({ level, saved, toggleSave, open, explore, openLevelPic
         </button>
       </section>
 
-      {takeawaysOpen && Boolean(meta.takeaways?.length) && <section className="takeaways">
+      {takeawaysOpen && Boolean(meta?.takeaways?.length) && <section className="takeaways">
         <p className="eyebrow">TL;DR — THE WEEK IN {meta.takeaways.length} LINES</p>
         <ol>{meta.takeaways.map((takeaway, index) => <li key={index}>{takeaway}</li>)}</ol>
         <div className="source-counts">
-          {meta.sourceCounts.map(({ emoji, name, count }) => <span key={name}>{emoji} {count} {name}</span>)}
+          {(meta.sourceCounts || []).map(({ emoji, name, count }) => <span key={name}>{emoji} {count} {name}</span>)}
+          {researchCount > 0 && <span>📄 {researchCount} DAIR.AI / arXiv Research Papers</span>}
         </div>
       </section>}
 
@@ -125,6 +133,7 @@ export function Timeline({ level, saved, toggleSave, open, explore, openLevelPic
         <div className="segmented">
           <button className={view === 'featured' ? 'on' : ''} onClick={() => setView('featured')}>Featured {featuredCount}</button>
           <button className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>All {stories.length}</button>
+          {researchCount > 0 && <button className={view === 'research' ? 'on' : ''} onClick={() => { setView('research'); setCategory('All'); }}>Research {researchCount}</button>}
         </div>
         <div className="chip-row">
           {categories.map(name => <button

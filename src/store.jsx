@@ -9,7 +9,7 @@ const inFlight = new Map();
 const resolved = new Map();
 
 async function getJson(url) {
-  const response = await fetch(url);
+  const response = await fetch(url, { cache: 'no-cache' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Request failed (${response.status})`);
   return body;
@@ -89,14 +89,30 @@ export function DigestProvider({ level, children }) {
   const value = useMemo(() => {
     const raw = digest.data?.stories || [];
     const adapted = decks.level === level ? decks.map : {};
+
+    // Beginner users will not be shown the research content
+    // Intermediate and Expert users will see research content with identical cards
+    const isBeginner = level === 'Beginner';
+    const filteredRaw = isBeginner
+      ? raw.filter(story => !story.isResearch && story.category !== 'Research')
+      : raw;
+
+    const researchStoriesCount = isBeginner ? 0 : raw.filter(s => s.isResearch || s.category === 'Research').length;
+
     return {
       status: digest.status,
       error: digest.error,
       reload: load,
       meta: digest.data,
+      researchWeeks: digest.data?.researchWeeks || [],
+      researchCount: researchStoriesCount,
       capabilities: digest.data?.capabilities || { gemini: false, tavily: false },
       decksLoading: decks.loading || decks.level !== level,
-      stories: raw.map(story => ({ ...story, deck: adapted[story.id] || story.tldr, deckAdapted: Boolean(adapted[story.id]) })),
+      stories: filteredRaw.map(story => ({
+        ...story,
+        deck: story.isResearch ? (story.deck || story.tldr) : (adapted[story.id] || story.tldr),
+        deckAdapted: story.isResearch ? true : Boolean(adapted[story.id]),
+      })),
     };
   }, [digest, decks, level, load]);
 

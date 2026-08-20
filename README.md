@@ -2,14 +2,15 @@
 
 UnboxingAI is a learning companion for making AI news and research easier to understand. It groups related coverage into one story, presents trusted sources together, and adapts the explanation to each learner’s chosen level.
 
-Story content is ingested live from [El Bruno’s Weekly AI & Tech News Digest](https://elbruno.github.io/weekly-ai-news-digest/), rewritten for the reader’s level by **Gemini**, and cross-referenced against other outlets by **Tavily**.
+Story content is ingested live from [El Bruno’s Weekly AI & Tech News Digest](https://elbruno.github.io/weekly-ai-news-digest/) and top AI research papers from [DAIR.AI’s AI Papers of the Week](https://github.com/dair-ai/AI-Papers-of-the-Week), rewritten for the reader’s level by **Gemini**, and cross-referenced against other outlets by **Tavily**.
 
 ## What the prototype includes
 
 - **Google sign-in:** OAuth 2.0 authentication keeps the app behind a simple, familiar sign-in flow.
 - **Personalized onboarding:** every newly signed-in learner chooses **Beginner**, **Intermediate**, or **Expert** before entering the product. The choice is remembered locally and can be changed later.
 - **Live AI timeline:** every story card is parsed from the weekly digest — headline, outlet, publication date, topic tags, editorial importance, and canonical link. The week’s TL;DR takeaways and per-outlet counts appear above the feed.
-- **Featured vs. all:** the timeline opens on a diverse **featured** set picked to span different outlets, categories, and importance levels, and can expand to every story in the digest.
+- **Top AI research papers:** research papers from the top 2 weeks of DAIR.AI’s weekly index are integrated directly into the timeline and in-depth research views, tagged as `Research`. Card content remains rich and identical for Intermediate and Expert learners, while Beginner learners are not shown research papers.
+- **Featured vs. all vs. research:** the timeline opens on a diverse **featured** set, can expand to all stories, or filter specifically by research papers or category chips.
 - **Level-adapted cards:** each card’s summary is written by Gemini for the reader’s current level, so the same story reads differently for a beginner and an expert. Cards paint immediately with the digest summary and upgrade in place.
 - **Sources as cards:** every source is presented as a card — on the timeline, in the reader, and in research — showing the outlet, domain, date, and a direct link to the original report.
 - **Story reader:** **Unbox this story** opens a level-adapted explanation with a short version, a plain-language line, key terms defined for that level, why it matters, and what to watch next. The level can be switched inside the reader.
@@ -29,10 +30,10 @@ Story content is ingested live from [El Bruno’s Weekly AI & Tech News Digest](
 
 ### How content flows
 
-1. `GET /api/digest` fetches and parses the digest HTML into structured stories (cached 30 minutes).
-2. `GET /api/decks?level=` asks Gemini for a one-sentence, level-adapted summary for every card, in batches.
-3. `GET /api/stories/:id/explain?level=` produces the full reader explanation for one story at one level.
-4. `GET /api/stories/:id/research?level=` runs Tavily for other outlets covering the story, and pairs Gemini-named exploration topics with real explainer links.
+1. `GET /api/digest` fetches and parses the news digest and top AI research papers from DAIR.AI into structured stories (cached).
+2. `GET /api/decks?level=` asks Gemini for a one-sentence, level-adapted summary for news cards, in batches.
+3. `GET /api/stories/:id/explain?level=` produces the full reader explanation for one story or research paper at one level.
+4. `GET /api/stories/:id/research?level=` runs Tavily/arXiv for other outlets and papers covering the story, and pairs exploration topics with real explainer links.
 
 Results are cached to `.cache/` and keyed by story and level, so re-reading a story costs nothing. API keys stay server-side; these endpoints require a signed-in session.
 

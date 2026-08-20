@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"node --watch server.js\" \"vite\"",
+    "dev": "concurrently \"node --watch --watch-path=./server server.js\" \"vite\"",
     "build": "vite build",
     "start": "node server.js"
   },

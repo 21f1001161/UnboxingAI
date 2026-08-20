@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { contentRoutes } from './server/api.js';
 import { getLearningState, runWeeklyNudges, saveLearningState, startWeeklyScheduler } from './server/learning.js';
 
+// Content API includes live digest stories and top AI research papers from DAIR.AI
 const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = process.env.PORT || 3000;

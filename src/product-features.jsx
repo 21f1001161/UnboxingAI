@@ -27,7 +27,7 @@ function Explorations({ explorations, capabilities }) {
           </li>)}
         </ul>
         : <p className="explore-empty">
-          {capabilities.tavily
+          {capabilities?.tavily
             ? 'No explainer links came back for this topic.'
             : <>Add <code>TAVILY_API_KEY</code> to pull explainers for this topic.</>}
         </p>}
@@ -44,14 +44,16 @@ function ResearchPanel({ story, level, saved, toggleSave, open }) {
   return <aside className="research-detail">
     <div className="detail-head">
       <div className="story-top">
-        <span className="tag">{story.category}</span>
-        <ImportanceBadge importance={story.importance} />
+        <span className={`tag${story.isResearch ? ' research-tag' : ''}`}>{story.category}</span>
+        {story.isResearch
+          ? <span className="research-badge" title="Top AI Paper of the Week">RESEARCH</span>
+          : <ImportanceBadge importance={story.importance} />}
         <span className="read">{story.mins} min</span>
       </div>
       <h2>{story.title}</h2>
       <p>{story.deck}</p>
       <div className="detail-actions">
-        <button onClick={() => open(story.id)}>Unbox this story →</button>
+        <button onClick={() => open(story.id)}>{story.isResearch ? 'Unbox this paper →' : 'Unbox this story →'}</button>
         <button onClick={() => toggleSave(story.id)} className={isSaved ? 'is-saved' : ''}>{isSaved ? '★ Saved' : '☆ Save'}</button>
       </div>
       <TagChips tags={story.tags} max={6} />
@@ -65,16 +67,25 @@ function ResearchPanel({ story, level, saved, toggleSave, open }) {
 
     {status === 'error' && <Notice tone="warn">{error}</Notice>}
 
+    {Boolean(story.bulletPoints?.length) && <section className="detail-section paper-key-findings">
+      <p className="eyebrow">KEY PAPER FINDINGS</p>
+      <ul className="paper-bullets">
+        {story.bulletPoints.map((bullet, idx) => <li key={idx}>
+          <strong>{bullet.split(':')[0]}:</strong>{bullet.includes(':') ? bullet.slice(bullet.indexOf(':') + 1) : bullet}
+        </li>)}
+      </ul>
+    </section>}
+
     {research && <>
-      {research.answer && <div className="synthesis"><span>✦</span><div><strong>What the coverage agrees on</strong><p>{research.answer}</p></div></div>}
+      {research.answer && <div className="synthesis"><span>✦</span><div><strong>{story.isResearch ? 'Research Overview' : 'What the coverage agrees on'}</strong><p>{research.answer}</p></div></div>}
 
       <section className="detail-section">
-        <p className="eyebrow">SOURCES ON THIS STORY · {research.sources.length + (research.related?.length || 0)}</p>
+        <p className="eyebrow">SOURCES ON THIS {story.isResearch ? 'PAPER' : 'STORY'} · {research.sources.length + (research.related?.length || 0)}</p>
         <div className="source-grid">
           {research.sources.map(source => <SourceCard
             key={source.url}
             source={source}
-            kicker={source.primary ? `Original report · ${story.sourceKind}` : undefined}
+            kicker={source.primary ? (story.isResearch ? 'Primary ArXiv Publication' : `Original report · ${story.sourceKind}`) : undefined}
           />)}
           {(research.related || []).map(item => <SourceCard
             key={item.id}
@@ -105,7 +116,7 @@ export function ResearchHub({ level, saved, toggleSave, open, focusId, setFocusI
   const results = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return stories.filter(story => {
-      const haystack = `${story.title} ${story.tldr} ${story.whyMatters} ${story.category} ${story.source} ${story.tags.join(' ')}`.toLowerCase();
+      const haystack = `${story.title} ${story.paperTitle || ''} ${story.tldr} ${story.whyMatters} ${story.category} ${story.source} ${(story.tags || []).join(' ')} ${(story.bulletPoints || []).join(' ')}`.toLowerCase();
       return (topic === 'All topics' || story.category === topic)
         && (source === 'All sources' || story.source === source)
         && (!needle || haystack.includes(needle));
@@ -125,10 +136,10 @@ export function ResearchHub({ level, saved, toggleSave, open, focusId, setFocusI
     </header>
 
     <section className="research-hero">
-      <p>Search this week&rsquo;s digest, then open a story to see every outlet covering it and the concepts worth learning first.</p>
+      <p>Search this week&rsquo;s digest and top research papers, then open an item to see all sources, discussion, and concepts worth learning first.</p>
       <div className="search-live">
         <span>⌕</span>
-        <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents, models, security, regulation…" />
+        <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search agents, models, security, scaling laws, tool calling…" />
         {query && <button onClick={() => setQuery('')}>Clear</button>}
       </div>
       <div className="filter-row">{topics.map(name => <button key={name} onClick={() => setTopic(name)} className={topic === name ? 'selected' : ''}>{name}</button>)}</div>
@@ -140,18 +151,18 @@ export function ResearchHub({ level, saved, toggleSave, open, focusId, setFocusI
 
     {status === 'ready' && <>
       <section className="result-head">
-        <p className="eyebrow">{results.length} STOR{results.length === 1 ? 'Y' : 'IES'} FOUND</p>
-        <span>Searches titles, summaries, topics, and outlets</span>
+        <p className="eyebrow">{results.length} {results.length === 1 ? 'RESULT' : 'RESULTS'} FOUND</p>
+        <span>Searches titles, research papers, summaries, topics, and outlets</span>
       </section>
 
       <div className={`research-split${selected ? ' has-detail' : ''}`}>
         <section className="result-grid">
           {results.map(story => <article
-            className={`result-card${story.id === focusId ? ' is-open' : ''}`}
+            className={`result-card${story.id === focusId ? ' is-open' : ''}${story.isResearch ? ' is-research-result' : ''}`}
             key={story.id}
           >
             <div>
-              <span className="tag">{story.category}</span>
+              <span className={`tag${story.isResearch ? ' research-tag' : ''}`}>{story.category}</span>
               <span className="read">{story.mins} min</span>
             </div>
             <h2>{story.title}</h2>
@@ -160,23 +171,24 @@ export function ResearchHub({ level, saved, toggleSave, open, focusId, setFocusI
               <span className="mini-avatar">{story.sourceEmoji || '◆'}</span>
               {story.source}
               <em>{domainOf(story.url)}</em>
-              {Boolean(story.related?.length) && <b>+{story.related.length} related</b>}
+              {Boolean(story.tweetUrl) && <b>+1 discussion</b>}
+              {!story.isResearch && Boolean(story.related?.length) && <b>+{story.related.length} related</b>}
             </div>
             <footer>
-              <button onClick={() => setFocusId(story.id)}>{story.id === focusId ? 'Showing sources' : 'Sources & topics →'}</button>
-              <button onClick={() => open(story.id)}>Read story</button>
+              <button onClick={() => setFocusId(story.id)}>{story.id === focusId ? 'Showing details' : 'Sources & topics →'}</button>
+              <button onClick={() => open(story.id)}>{story.isResearch ? 'Read paper' : 'Read story'}</button>
               <button onClick={() => toggleSave(story.id)} className={saved.includes(story.id) ? 'is-saved' : ''}>{saved.includes(story.id) ? '★' : '☆'}</button>
             </footer>
           </article>)}
-          {!results.length && <div className="no-results"><span>⌕</span><h2>No stories yet</h2><p>Try a broader search or another topic.</p></div>}
+          {!results.length && <div className="no-results"><span>⌕</span><h2>No stories or papers yet</h2><p>Try a broader search or another topic.</p></div>}
         </section>
 
         {selected
           ? <ResearchPanel story={selected} level={level} saved={saved} toggleSave={toggleSave} open={open} />
           : <aside className="research-detail placeholder">
             <span>◎</span>
-            <h2>Pick a story to research it.</h2>
-            <p>You&rsquo;ll get every outlet covering the same event, plus the background concepts worth learning first — chosen for a {level.toLowerCase()} reader.</p>
+            <h2>Pick a story or paper to research it.</h2>
+            <p>You&rsquo;ll get every outlet covering the event or research, plus the background concepts worth learning first — tailored for a {level.toLowerCase()} reader.</p>
           </aside>}
       </div>
     </>}
@@ -196,7 +208,7 @@ function SavedRow({ entry, index, inPlaylist, togglePlaylist, toggleSave, open, 
       <div>
         <small>NOT IN THIS WEEK&rsquo;S DIGEST</small>
         <h3>{id.replace(/-/g, ' ')}</h3>
-        <p>This story has rolled off the current digest, so there is nothing left to open.</p>
+        <p>This item has rolled off the current digest or research feed, so there is nothing left to open.</p>
       </div>
       <aside><button onClick={() => toggleSave(id)}>Remove</button></aside>
     </article>;
@@ -209,9 +221,9 @@ function SavedRow({ entry, index, inPlaylist, togglePlaylist, toggleSave, open, 
       <h3>{story.title}</h3>
       <p>{story.deck}</p>
       <div className="saved-links">
-        <button onClick={() => open(story.id)}>Continue reading →</button>
+        <button onClick={() => open(story.id)}>{story.isResearch ? 'Continue reading paper →' : 'Continue reading →'}</button>
         <button onClick={() => explore(story.id)}>Sources &amp; topics</button>
-        <a href={story.url} target="_blank" rel="noopener noreferrer">{story.sourceEmoji} {story.source} ↗</a>
+        <a href={story.url} target="_blank" rel="noopener noreferrer">{story.sourceEmoji || '📄'} {story.source} ↗</a>
       </div>
     </div>
     <aside>
@@ -225,8 +237,6 @@ export function LearningDashboard({ saved, toggleSave, open, explore, playlist, 
   const { stories, status } = useDigest();
   const [notify, setNotify] = useState(true);
 
-  // Preserve the order the learner saved things in, and keep entries whose
-  // story has aged out of the digest so nothing silently disappears.
   const entries = useMemo(
     () => saved.map(id => ({ id, story: stories.find(story => story.id === id) || null })),
     [saved, stories],
@@ -241,7 +251,7 @@ export function LearningDashboard({ saved, toggleSave, open, explore, playlist, 
     </header>
 
     <section className="learning-stats">
-      <div><strong>{saved.length}</strong><span>saved stories</span></div>
+      <div><strong>{saved.length}</strong><span>saved items</span></div>
       <div><strong>{playlist.length}</strong><span>in your playlist</span></div>
       <div><strong>{minutes}</strong><span>minutes queued</span></div>
       <div><strong>{notify ? 'Sun' : 'Off'}</strong><span>weekly recap</span></div>
@@ -271,7 +281,7 @@ export function LearningDashboard({ saved, toggleSave, open, explore, playlist, 
         : <div className="empty-state">
           <span>☆</span>
           <h2>Your learning queue is ready when you are.</h2>
-          <p>Save a story from the timeline or research page to revisit it here.</p>
+          <p>Save a story or paper from the timeline or research page to revisit it here.</p>
         </div>)}
     </section>
 
@@ -280,7 +290,7 @@ export function LearningDashboard({ saved, toggleSave, open, explore, playlist, 
         <span>✦</span>
         <p className="eyebrow">WEEKLY LEARNING NUDGE</p>
         <h2>Get a thoughtful recap every Sunday.</h2>
-        <p>We&rsquo;ll remind you of saved stories and share a quick summary of what you have not opened yet.</p>
+        <p>We&rsquo;ll remind you of saved stories and papers with a quick summary of what you have not opened yet.</p>
       </div>
       <button onClick={() => setNotify(!notify)} className={notify ? 'toggle-button on' : 'toggle-button'}><i></i>{notify ? 'Enabled' : 'Disabled'}</button>
     </section>
@@ -292,7 +302,7 @@ export function LearningDashboard({ saved, toggleSave, open, explore, playlist, 
  * ------------------------------------------------------------------ */
 
 export function Settings({ user, level, changeLevel, signOut }) {
-  const { capabilities, meta } = useDigest();
+  const { capabilities, meta, researchCount } = useDigest();
 
   return <>
     <header><div><p className="eyebrow">ACCOUNT</p><h1>Your learning,<br /><i>your way.</i></h1></div></header>
@@ -310,19 +320,19 @@ export function Settings({ user, level, changeLevel, signOut }) {
 
       <div className="settings-row">
         <div>
-          <h3>Story source</h3>
-          <p>{meta ? <>{meta.stories.length} stories from <a href={meta.digestUrl} target="_blank" rel="noopener noreferrer">{meta.title}</a>.</> : 'Loading the weekly digest…'}</p>
+          <h3>Content sources</h3>
+          <p>{meta ? <>{meta.newsCount || meta.stories?.length} stories from <a href={meta.digestUrl} target="_blank" rel="noopener noreferrer">{meta.title}</a> and {researchCount > 0 ? `${researchCount} top AI research papers from DAIR.AI.` : 'top research papers.'}</> : 'Loading sources…'}</p>
         </div>
         <small className="status ok">Connected</small>
       </div>
 
       <div className="settings-row">
-        <div><h3>Level-adapted explanations</h3><p>Gemini rewrites every story for your chosen level.</p></div>
+        <div><h3>Level-adapted explanations</h3><p>Gemini rewrites news stories for your chosen level.</p></div>
         <small className={`status ${capabilities.gemini ? 'ok' : 'off'}`}>{capabilities.gemini ? 'Gemini connected' : 'GEMINI_API_KEY not set'}</small>
       </div>
 
       <div className="settings-row">
-        <div><h3>Multi-source research</h3><p>Tavily finds other outlets and background explainers.</p></div>
+        <div><h3>Multi-source research</h3><p>Tavily and arXiv find research papers, cross-coverage, and explainers.</p></div>
         <small className={`status ${capabilities.tavily ? 'ok' : 'off'}`}>{capabilities.tavily ? 'Tavily connected' : 'TAVILY_API_KEY not set'}</small>
       </div>
 
