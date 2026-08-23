@@ -42,7 +42,8 @@ passport.use(new GoogleStrategy({
 })));
 
 app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: '/?auth=failed' }), (_req, res) => res.redirect('http://localhost:5173'));
+const appUrl = () => (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '');
+app.get('/api/auth/google/callback', passport.authenticate('google', { failureRedirect: '/?auth=failed' }), (_req, res) => res.redirect(appUrl()));
 app.get('/api/auth/me', (req, res) => res.json({ user: req.user || null }));
 app.post('/api/auth/logout', (req, res, next) => req.logout(err => err ? next(err) : req.session.destroy(() => res.status(204).end())));
 
@@ -60,7 +61,7 @@ app.post('/api/nudges/test', async (req, res) => {
 
   const titles = Array.isArray(req.body?.stories) ? req.body.stories.slice(0, 3).map(String) : [];
   const summary = titles.length ? `<ul>${titles.map(title => `<li>${title.replace(/[<>&]/g, '')}</li>`).join('')}</ul>` : '<p>Your learning queue is ready for a new story.</p>';
-  const playlistUrl = `${process.env.APP_URL || 'http://localhost:5173'}/?view=dashboard#learning-playlist`;
+  const playlistUrl = `${appUrl()}/?view=dashboard#learning-playlist`;
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
