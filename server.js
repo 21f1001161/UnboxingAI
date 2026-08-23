@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contentRoutes } from './server/api.js';
 import { getLearningState, runWeeklyNudges, saveLearningState, startWeeklyScheduler } from './server/learning.js';
+import { warmUpCache } from './server/warmup.js';
 
 // Content API includes live digest stories and top AI research papers from DAIR.AI
 const app = express();
@@ -98,5 +99,13 @@ if (!process.env.TAVILY_API_KEY) console.warn('TAVILY_API_KEY is not set. Resear
 
 app.use(express.static(path.join(root, 'dist')));
 app.use((_req, res) => res.sendFile(path.join(root, 'dist', 'index.html')));
-app.listen(port, () => console.log(`UnboxingAI auth server listening at http://localhost:${port}`));
+app.listen(port, () => {
+  console.log(`UnboxingAI auth server listening at http://localhost:${port}`);
+  // Preload and cache all story decks, explanations, and research across all reader levels
+  setTimeout(() => {
+    warmUpCache({ onProgress: msg => console.log(`[cache-warmup] ${msg}`) }).catch(err => {
+      console.warn('[cache-warmup] Warmup encountered an issue:', err.message);
+    });
+  }, 1000);
+});
 startWeeklyScheduler();

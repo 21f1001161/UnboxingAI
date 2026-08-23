@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "concurrently \"node --watch --watch-path=./server server.js\" \"vite\"",
     "build": "vite build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "cache:warm": "node server/warmup.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

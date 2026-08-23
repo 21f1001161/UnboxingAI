@@ -222,23 +222,29 @@ export function researchStory(story, level, allStories = []) {
   }
 
   return cached(`research:v4:${story.id}:${level}`, TTL, async () => {
-    const [coverageResult, explorations] = await Promise.all([
-      coverageFor(story).catch(error => {
-        console.warn(`[tavily] coverage for ${story.id} failed:`, error.message);
-        return { coverage: [], answer: null };
-      }),
-      explorationsFor(story, level),
-    ]);
-    return {
-      sources: [primary, ...coverageResult.coverage],
-      explorations,
-      answer: coverageResult.answer,
-      generatedBy: 'tavily',
-    };
+    try {
+      const [coverageResult, explorations] = await Promise.all([
+        coverageFor(story).catch(error => {
+          console.warn(`[tavily] coverage for ${story.id} failed:`, error.message);
+          return { coverage: [], answer: null };
+        }),
+        explorationsFor(story, level),
+      ]);
+      return {
+        sources: [primary, ...coverageResult.coverage],
+        explorations,
+        answer: coverageResult.answer,
+        generatedBy: 'tavily',
+      };
+    } catch (error) {
+      console.warn(`[research] ${story.id} failed:`, error.message);
+      return { sources: [primary], explorations: [], answer: null, generatedBy: 'digest-only' };
+    }
   })
     .then(result => ({ ...result, related }))
     .catch(error => {
-      console.warn(`[research] ${story.id} failed:`, error.message);
+      console.warn(`[research] ${story.id} outer failed:`, error.message);
       return { sources: [primary], related, explorations: [], answer: null, generatedBy: 'digest-only' };
     });
 }
+

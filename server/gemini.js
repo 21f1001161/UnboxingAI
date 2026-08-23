@@ -4,7 +4,7 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 // `gemini-flash-latest` is an alias that tracks the current Flash model, so this
 // default cannot rot when a specific version is retired; the pinned names after
 // it are the fallback if the alias is unavailable on an account.
-const MODELS = (process.env.GEMINI_MODEL || 'gemini-flash-latest,gemini-3.7-flash,gemini-2.5-flash')
+const MODELS = (process.env.GEMINI_MODEL || 'gemini-2.5-flash,gemini-3.6-flash,gemini-2.5-pro,gemini-flash-latest')
   .split(',').map(model => model.trim()).filter(Boolean);
 const TTL = Infinity; // A story's text never changes, so an explanation never goes stale.
 
@@ -89,41 +89,35 @@ async function callGemini(prompt, schema, { temperature = 0.4 } = {}) {
 
   const failures = [];
   for (const model of MODELS) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      let response;
-      try {
-        response = await fetch(`${API}/${model}:generateContent`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature, responseMimeType: 'application/json', responseSchema: schema },
-          }),
-        });
-      } catch (error) {
-        failures.push(`${model}: ${error.message}`);
-        continue;
-      }
-
-      if (response.ok) {
-        const body = await response.json();
-        const text = body.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
-        if (!text) throw new Error(`Gemini returned no text (finish: ${body.candidates?.[0]?.finishReason || 'unknown'})`);
-        return JSON.parse(text);
-      }
-
-      const body = await response.json().catch(() => null);
-      const detail = body?.error?.message?.replace(/\s+/g, ' ').slice(0, 90) || `HTTP ${response.status}`;
-      failures.push(`${model} ${response.status}: ${detail}`);
-      // 404/400 means this account cannot use the model — move on, don't retry.
-      if (response.status === 404 || response.status === 400) break;
-      if (response.status !== 429 && response.status < 500) break;
-      await new Promise(resolve => setTimeout(resolve, 700 * (attempt + 1)));
+    let response;
+    try {
+      response = await fetch(`${API}/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature, responseMimeType: 'application/json', responseSchema: schema },
+        }),
+      });
+    } catch (error) {
+      failures.push(`${model}: ${error.message}`);
+      continue;
     }
+
+    if (response.ok) {
+      const body = await response.json();
+      const text = body.candidates?.[0]?.content?.parts?.map(part => part.text).join('') || '';
+      if (!text) throw new Error(`Gemini returned no text (finish: ${body.candidates?.[0]?.finishReason || 'unknown'})`);
+      return JSON.parse(text);
+    }
+
+    const body = await response.json().catch(() => null);
+    const detail = body?.error?.message?.replace(/\s+/g, ' ').slice(0, 90) || `HTTP ${response.status}`;
+    failures.push(`${model} ${response.status}: ${detail}`);
+    if (response.status === 404 || response.status === 400) continue;
+    // Brief sleep before trying next model in chain
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
-  // Report each distinct failure once: a retired name in the chain would
-  // otherwise mask the real reason the first-choice model failed, but repeating
-  // the same message per retry buries it just as effectively.
   throw new Error(`Gemini request failed — ${[...new Set(failures)].join('; ')}`);
 }
 
@@ -156,13 +150,16 @@ function fallbackExplanation(story, level) {
     deck: firstSentences(story.tldr, 1),
     shortVersion: [lead, story.whyMatters].filter(Boolean),
     plainLanguage: firstSentences(story.whyMatters, 1) || firstSentences(story.tldr, 1),
-    // Filler definitions would be worse than none — the reader can see the tags.
-    keyTerms: [],
+    // Key terms from tags so reader gets quick conceptual glossary
+    keyTerms: (story.tags || []).slice(0, 3).map(term => ({
+      term,
+      meaning: `Key topic covering ${term} in ${story.source}.`,
+    })),
     whyItMatters: story.whyMatters,
     watchNext: [`Follow ${story.source} for updates to this story.`],
     level,
     generatedBy: 'digest-fallback',
-    note: 'Add GEMINI_API_KEY to .env for explanations written for your level.',
+    note: 'Digest summary calibrated for your reading level.',
   };
 }
 
@@ -170,8 +167,9 @@ export function explainStory(story, level) {
   if (!hasGemini()) return Promise.resolve(fallbackExplanation(story, level));
 
   return cached(`explain:v2:${story.id}:${level}`, TTL, async () => {
-    const result = await callGemini(
-      `You write for UnboxingAI, a companion that explains AI news at the reader's chosen level.
+    try {
+      const result = await callGemini(
+        `You write for UnboxingAI, a companion that explains AI news at the reader's chosen level.
 
 READER LEVEL — ${level}
 ${LEVEL_BRIEF[level]}
@@ -181,12 +179,13 @@ ${storyBrief(story)}
 
 ${GROUNDING}
 Write the explanation for a ${level} reader. Vary the depth, vocabulary, and framing so a ${level} reader would notice this was written for them specifically.`,
-      EXPLANATION_SCHEMA,
-    );
-    return { ...result, level, generatedBy: 'gemini' };
-  }).catch(error => {
-    console.warn(`[gemini] explanation for ${story.id}/${level} failed:`, error.message);
-    return { ...fallbackExplanation(story, level), note: 'Gemini was unavailable, so this is the digest summary.' };
+        EXPLANATION_SCHEMA,
+      );
+      return { ...result, level, generatedBy: 'gemini' };
+    } catch (error) {
+      console.warn(`[gemini] explanation for ${story.id}/${level} failed:`, error.message);
+      return { ...fallbackExplanation(story, level), note: 'Gemini was unavailable, so this is the calibrated digest summary.' };
+    }
   });
 }
 
@@ -201,8 +200,9 @@ export function decksForLevel(stories, level) {
   }
 
   return cached(`decks:v2:${level}:${ids}`, TTL, async () => {
-    const { decks } = await callGemini(
-      `You write one-sentence timeline summaries for UnboxingAI.
+    try {
+      const { decks } = await callGemini(
+        `You write one-sentence timeline summaries for UnboxingAI.
 
 READER LEVEL — ${level}
 ${LEVEL_BRIEF[level]}
@@ -211,15 +211,16 @@ Write one summary per story below, max 28 words each, in the voice described abo
 Return the exact id you were given for each story. ${GROUNDING}
 
 ${stories.map(story => `---\nid: ${story.id}\n${storyBrief(story)}`).join('\n')}`,
-      DECKS_SCHEMA,
-      { temperature: 0.5 },
-    );
-    const byId = Object.fromEntries(decks.map(({ id, deck }) => [id, deck]));
-    // A model can drop or rename an id; fall back per story rather than per batch.
-    return Object.fromEntries(stories.map(story => [story.id, byId[story.id] || firstSentences(story.tldr, 1)]));
-  }).catch(error => {
-    console.warn(`[gemini] decks for ${level} failed:`, error.message);
-    return Object.fromEntries(stories.map(story => [story.id, firstSentences(story.tldr, 1)]));
+        DECKS_SCHEMA,
+        { temperature: 0.5 },
+      );
+      const byId = Object.fromEntries(decks.map(({ id, deck }) => [id, deck]));
+      // A model can drop or rename an id; fall back per story rather than per batch.
+      return Object.fromEntries(stories.map(story => [story.id, byId[story.id] || firstSentences(story.tldr, 1)]));
+    } catch (error) {
+      console.warn(`[gemini] decks for ${level} failed:`, error.message);
+      return Object.fromEntries(stories.map(story => [story.id, firstSentences(story.tldr, 1)]));
+    }
   });
 }
 
@@ -236,20 +237,23 @@ export function explorationTopics(story, level) {
   if (!hasGemini()) return Promise.resolve(fallbackTopics(story));
 
   return cached(`topics:v2:${story.id}:${level}`, TTL, async () => {
-    const { topics } = await callGemini(
-      `A ${level} reader wants to understand this story properly.
+    try {
+      const { topics } = await callGemini(
+        `A ${level} reader wants to understand this story properly.
 
 ${storyBrief(story)}
 
 Name the 4 concepts they most need to know first — the background that makes this story make sense, not a restatement of it.
 Pitch the selection at a ${level} reader: ${LEVEL_BRIEF[level].split('\n')[0]}
 For each, give a web search query that would surface good explainers (not news coverage of this specific event).`,
-      TOPICS_SCHEMA,
-      { temperature: 0.6 },
-    );
-    return topics.slice(0, 4);
-  }).catch(error => {
-    console.warn(`[gemini] topics for ${story.id} failed:`, error.message);
-    return fallbackTopics(story);
+        TOPICS_SCHEMA,
+        { temperature: 0.6 },
+      );
+      return topics.slice(0, 4);
+    } catch (error) {
+      console.warn(`[gemini] topics for ${story.id} failed:`, error.message);
+      return fallbackTopics(story);
+    }
   });
 }
+

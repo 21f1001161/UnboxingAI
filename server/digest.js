@@ -3,13 +3,17 @@ import { cached } from './cache.js';
 export const DIGEST_URL = process.env.DIGEST_URL || 'https://elbruno.github.io/weekly-ai-news-digest/';
 const DIGEST_TTL = 30 * 60 * 1000;
 
-const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', mdash: '—', ndash: '–', hellip: '…', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”' };
+const ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  mdash: '—', ndash: '–', hellip: '…', rsquo: '’', lsquo: '‘',
+  ldquo: '“', rdquo: '”', '#39': "'",
+};
 
 function decode(value = '') {
   return value
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
-    .replace(/&([a-z]+);/gi, (match, name) => ENTITIES[name.toLowerCase()] ?? match);
+    .replace(/&([a-z0-9#]+);/gi, (match, name) => ENTITIES[name.toLowerCase()] ?? match);
 }
 
 const text = (html = '') => decode(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
@@ -33,19 +37,19 @@ const DEFAULT_STYLE = { color: 'violet', glyph: '✦', kind: 'Reporting' };
 // generic "AI" tag and a security story is never filed under Tools.
 const CATEGORY_RULES = [
   ['Policy', ['policy', 'regulation', 'governance']],
-  ['Security', ['security', 'privacy', 'moderation']],
-  ['Research', ['research', 'science']],
-  ['Models', ['llms', 'models', 'model']],
-  ['Business', ['startups', 'funding', 'enterprise', 'm&a']],
-  ['Tools', ['tools', 'developer experience', 'productivity', 'github', 'web']],
+  ['Security', ['security', 'privacy', 'moderation', 'vulnerability', 'attack', 'leak', 'prompt injection']],
+  ['Research', ['research', 'science', 'paper', 'benchmark', 'nanogpt']],
+  ['Models', ['llms', 'models', 'model', 'copilot', 'gemini', 'gpt', 'claude', 'grok']],
+  ['Business', ['startups', 'funding', 'enterprise', 'm&a', 'market']],
+  ['Tools', ['tools', 'developer experience', 'productivity', 'github', 'web', 'vs code', 'cli', 'plugins', 'mcp']],
   ['Open source', ['open source', 'opensource']],
-  ['Infrastructure', ['cloud', 'databases', 'apis', 'devops']],
+  ['Infrastructure', ['cloud', 'databases', 'apis', 'devops', 'azure', 'databricks']],
 ];
 
 function categoryFor(tags) {
-  const lower = tags.map(tag => tag.toLowerCase());
+  const lowerTags = tags.map(tag => tag.toLowerCase());
   for (const [category, needles] of CATEGORY_RULES) {
-    if (needles.some(needle => lower.includes(needle))) return category;
+    if (needles.some(needle => lowerTags.some(tag => tag.includes(needle)))) return category;
   }
   return 'AI';
 }
@@ -62,27 +66,60 @@ function readingMinutes(tags, ...parts) {
   return Math.max(3, Math.min(9, Math.round((words + 260 + tags.length * 18) / 95)));
 }
 
-function parseList(html, sectionId) {
-  const section = html.match(new RegExp(`id="${sectionId}"([\\s\\S]*?)</section>`));
-  if (!section) return [];
-  const list = section[1].match(/<ul class="lang-block" data-lang="en">([\s\S]*?)<\/ul>/);
-  if (!list) return [];
-  return [...list[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(match => text(match[1]));
+function parseTakeaways(html) {
+  const section = html.match(/id="top-takeaways"([\s\S]*?)<\/section>/i);
+  if (section) {
+    const list = section[1].match(/<ul class="lang-block" data-lang="en">([\s\S]*?)<\/ul>/i);
+    if (list) return [...list[1].matchAll(/<li>([\s\S]*?)<\/li>/gi)].map(match => text(match[1]));
+  }
+  const match = html.match(/Top takeaways[\s\S]*?<\/h2>[\s\S]*?<ul>([\s\S]*?)<\/ul>/i);
+  if (!match) return [];
+  return [...match[1].matchAll(/<li>([\s\S]*?)<\/li>/gi)].map(m => {
+    const en = m[1].match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || m[1];
+    return text(en);
+  });
+}
+
+function parseHighlights(html) {
+  const section = html.match(/id="gh-highlights"([\s\S]*?)<\/section>/i);
+  if (section) {
+    const list = section[1].match(/<ul class="lang-block" data-lang="en">([\s\S]*?)<\/ul>/i);
+    if (list) return [...list[1].matchAll(/<li>([\s\S]*?)<\/li>/gi)].map(match => text(match[1]));
+  }
+  const match = html.match(/GitHub highlights[\s\S]*?<\/h2>[\s\S]*?<ul>([\s\S]*?)<\/ul>/i);
+  if (!match) return [];
+  return [...match[1].matchAll(/<li>([\s\S]*?)<\/li>/gi)].map(m => {
+    const en = m[1].match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || m[1];
+    return text(en);
+  });
 }
 
 function parseCard(block) {
   const tags = attr(block, 'tags').split(',').map(tag => decode(tag).trim()).filter(Boolean);
   const source = decode(attr(block, 'source'));
-  const url = (block.match(/<h2 class="card-title">\s*<a href="([^"]+)"/) || [, ''])[1];
-  const titleBlock = block.match(/<h2 class="card-title">([\s\S]*?)<\/h2>/)?.[1] || '';
-  const title = text(titleBlock.match(/data-lang="en">([\s\S]*?)<\/span>/)?.[1] || '');
-  const titleEs = text(titleBlock.match(/data-lang="es">([\s\S]*?)<\/span>/)?.[1] || '');
-  const tldr = text(block.match(/<p class="tldr lang-block" data-lang="en">([\s\S]*?)<\/p>/)?.[1] || '');
-  const tldrEs = text(block.match(/<p class="tldr lang-block" data-lang="es">([\s\S]*?)<\/p>/)?.[1] || '');
-  const whyBlock = block.match(/<div class="why-matters">([\s\S]*?)<\/div>/)?.[1] || '';
-  const whyMatters = text(whyBlock.match(/data-lang="en">([\s\S]*?)<\/span>/)?.[1] || '').replace(/^Why it matters:\s*/i, '');
-  const sourceLabel = text(block.match(/<span class="source-label">([\s\S]*?)<\/span>/)?.[1] || '');
-  const emoji = sourceLabel.match(/^(\P{ASCII})/u)?.[1] || '';
+
+  const url = (
+    block.match(/<(?:h2|div)[^>]*class="(?:card-)?title"[^>]*>\s*<a\s+[^>]*href="([^"]+)"/i) ||
+    block.match(/<a\s+[^>]*href="([^"]+)"/i) ||
+    [, '']
+  )[1];
+
+  const titleBlock = block.match(/<(?:h2|div)[^>]*class="(?:card-)?title"[^>]*>([\s\S]*?)<\/(?:h2|div)>/i)?.[1] || '';
+  const titleEn = titleBlock.match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1];
+  const titleEs = titleBlock.match(/data-lang="es"[^>]*>([\s\S]*?)<\/span>/i)?.[1];
+  const title = text(titleEn || titleBlock);
+
+  const tldrBlock = block.match(/<p[^>]*class="tldr[^"]*"[^>]*>([\s\S]*?)<\/p>/i)?.[1] || '';
+  const tldrEn = tldrBlock.match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || (tldrBlock.includes('data-lang="en"') ? '' : tldrBlock);
+  const tldrEsText = tldrBlock.match(/data-lang="es"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || '';
+  const tldr = text(tldrEn || tldrBlock);
+
+  const whyBlock = block.match(/<(?:div|p)[^>]*class="(?:why-matters|why)[^"]*"[^>]*>([\s\S]*?)<\/(?:div|p)>/i)?.[1] || '';
+  const whyEn = whyBlock.match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || whyBlock;
+  const whyMatters = text(whyEn).replace(/^(?:Why it matters:\s*|Por qu[ée] importa:\s*)/i, '');
+
+  const sourceDiv = block.match(/<(?:div|span)[^>]*class="source(?:-label)?"[^>]*>([\s\S]*?)<\/(?:div|span)>/i)?.[1] || '';
+  const emoji = text(sourceDiv).match(/^(\P{ASCII})/u)?.[1] || '';
   const style = SOURCE_STYLE[source] || DEFAULT_STYLE;
   const published = attr(block, 'published');
 
@@ -92,7 +129,7 @@ function parseCard(block) {
     id: slug(title),
     rank: Number(attr(block, 'rank')) || 0,
     published,
-    dateLabel: new Date(`${published}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' }).toUpperCase(),
+    dateLabel: published ? new Date(`${published}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: '2-digit', timeZone: 'UTC' }).toUpperCase() : '',
     importance: attr(block, 'importance') || 'Medium',
     source,
     sourceEmoji: emoji,
@@ -102,9 +139,9 @@ function parseCard(block) {
     tags,
     category: categoryFor(tags),
     title,
-    titleEs,
+    titleEs: text(titleEs),
     tldr,
-    tldrEs,
+    tldrEs: text(tldrEsText),
     whyMatters,
     url,
     mins: readingMinutes(tags, tldr, whyMatters),
@@ -140,9 +177,26 @@ function markFeatured(stories, count = 7) {
   return stories;
 }
 
+function parseSourceCounts(html) {
+  const classic = [...html.matchAll(/<div class="stat">\s*(\P{ASCII})\s*(\d+)\s+([^<]+?)\s*<\/div>/gu)]
+    .map(([, emoji, count, name]) => ({ emoji, name: decode(name).trim(), count: Number(count) }));
+  if (classic.length) return classic;
+
+  return [...html.matchAll(/<div class="stat"[^>]*>([\s\S]*?)<\/div>/gi)]
+    .map(m => {
+      const en = m[1].match(/data-lang="en"[^>]*>([\s\S]*?)<\/span>/i)?.[1] || m[1];
+      const t = text(en);
+      const match = t.match(/^(\d+)\s+from\s+(.*)$/i);
+      if (!match) return null;
+      return { emoji: '📰', count: Number(match[1]), name: match[2].trim() };
+    })
+    .filter(Boolean);
+}
+
 export function parseDigest(html) {
-  const stories = [...html.matchAll(/<article class="story-card"([\s\S]*?)<\/article>/g)]
-    .map(match => parseCard(match[1]))
+  const articles = [...html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/gi)];
+  const stories = articles
+    .map(match => parseCard(match[0]))
     .filter(Boolean)
     .sort((a, b) => a.rank - b.rank);
 
@@ -154,15 +208,12 @@ export function parseDigest(html) {
     if (count > 1) story.id = `${story.id}-${count}`;
   }
 
-  const sourceCounts = [...html.matchAll(/<div class="stat">\s*(\P{ASCII})\s*(\d+)\s+([^<]+?)\s*<\/div>/gu)]
-    .map(([, emoji, count, name]) => ({ emoji, name: decode(name).trim(), count: Number(count) }));
-
   return {
     title: text(html.match(/<title>([\s\S]*?)<\/title>/)?.[1] || 'Weekly AI & Tech News Digest'),
     range: text(html.match(/<title>[^<]*—([^<]*)<\/title>/)?.[1] || ''),
-    takeaways: parseList(html, 'top-takeaways'),
-    highlights: parseList(html, 'gh-highlights'),
-    sourceCounts,
+    takeaways: parseTakeaways(html),
+    highlights: parseHighlights(html),
+    sourceCounts: parseSourceCounts(html),
     stories: markFeatured(stories),
     digestUrl: DIGEST_URL,
     fetchedAt: new Date().toISOString(),
@@ -183,3 +234,4 @@ export async function findStory(id) {
   const digest = await getDigest();
   return digest.stories.find(story => story.id === id) || null;
 }
+
