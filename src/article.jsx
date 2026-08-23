@@ -50,6 +50,10 @@ export function Article({ story: incoming, level, setLevel, close, saved, toggle
         {story.isResearch ? `TOP AI PAPER OF THE WEEK · ${story.dateLabel}` : `ONE STORY · ${sourceCount} SOURCE${sourceCount === 1 ? '' : 'S'} · ${story.dateLabel}`}
       </p>
       <h1>{story.title}</h1>
+      <a className="primary-publication-button" href={story.url} target="_blank" rel="noopener noreferrer">
+        <span>{story.isResearch ? 'arXiv' : story.source}</span>
+        {story.isResearch ? 'Open original publication' : 'Open original source'} ↗
+      </a>
 
       <div className="article-meta">
         <span>◷ {story.mins} min</span>
@@ -74,7 +78,7 @@ export function Article({ story: incoming, level, setLevel, close, saved, toggle
         {explanation && <>
           <p className="lead">{explanation.deck}</p>
 
-          <h2>{story.isResearch ? 'Paper summary' : 'The short version'}</h2>
+          <h2>Executive summary</h2>
           {explanation.shortVersion.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
 
           {Boolean(bullets.length) && <>
@@ -115,7 +119,10 @@ export function Article({ story: incoming, level, setLevel, close, saved, toggle
           {explanation.generatedBy !== 'gemini' && explanation.note && <Notice tone="info">{explanation.note}</Notice>}
         </>}
 
-        <h2>Primary publication &amp; discussion</h2>
+        <div className="publication-section-head">
+          <h2>Primary publication &amp; discussion</h2>
+          <a href={story.url} target="_blank" rel="noopener noreferrer">Original publication ↗</a>
+        </div>
         <div className="source-grid">
           <SourceCard
             source={{

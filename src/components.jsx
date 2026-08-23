@@ -10,6 +10,26 @@ export function domainOf(url) {
   }
 }
 
+const SOURCE_BRANDS = [
+  { match: /arxiv/i, label: 'arXiv', tone: 'arxiv' },
+  { match: /dair\.ai|dair ai/i, label: 'DAIR', tone: 'dair' },
+  { match: /github/i, label: 'GH', tone: 'github' },
+  { match: /microsoft/i, label: 'MS', tone: 'microsoft' },
+  { match: /anthropic/i, label: 'AI', tone: 'anthropic' },
+  { match: /google/i, label: 'G', tone: 'google' },
+  { match: /openai/i, label: 'OA', tone: 'openai' },
+  { match: /techcrunch/i, label: 'TC', tone: 'techcrunch' },
+  { match: /the verge/i, label: 'V', tone: 'verge' },
+  { match: /hugging ?face/i, label: 'HF', tone: 'huggingface' },
+];
+
+/** Code-native source marks that remain crisp without loading third-party logos. */
+export function SourceBadge({ name = '', domain = '', emoji, className = '' }) {
+  const brand = SOURCE_BRANDS.find(entry => entry.match.test(`${name} ${domain}`));
+  const initials = (name || domain || '?').replace(/[^A-Za-z0-9 ]/g, '').split(' ').filter(Boolean).slice(0, 2).map(word => word[0]).join('').toUpperCase();
+  return <span className={`source-badge ${brand?.tone || 'generic'} ${className}`} title={name || domain} aria-label={name || domain}>{brand?.label || emoji || initials || '•'}</span>;
+}
+
 const IMPORTANCE_DOT = { High: '●', Medium: '◐', Low: '○' };
 
 export const importanceClass = importance => `importance ${String(importance).toLowerCase()}`;
@@ -44,6 +64,7 @@ export function SourceCard({ source, kicker, onOpenStory }) {
 
   return <article className={`source-card${primary ? ' is-primary' : ''}`}>
     <header>
+      <SourceBadge name={label} domain={domain} emoji={sourceEmoji} className="visual-source-mark" />
       <span className="source-avatar">{sourceEmoji || initials || '◆'}</span>
       <div>
         <strong>{label}</strong>

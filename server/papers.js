@@ -525,10 +525,10 @@ export async function getResearchPapers({ force = false } = {}) {
 export function explainResearchPaper(paperStory, level = 'Intermediate') {
   if (level === 'Beginner') {
     return {
-      deck: paperStory.tldr,
+      deck: `Beginner pick: ${paperStory.tldr}`,
       shortVersion: [
         paperStory.tldr,
-        'Research papers in UnboxingAI are tailored for Intermediate and Expert learners exploring technical literature.',
+        'You do not need every technical detail yet. Start with the question the researchers asked, what they found, and why it might matter.',
       ],
       plainLanguage: paperStory.tldr,
       keyTerms: (paperStory.tags || []).slice(0, 4).map(tag => ({
@@ -542,7 +542,7 @@ export function explainResearchPaper(paperStory, level = 'Intermediate') {
       ],
       level,
       generatedBy: 'research-paper-digest',
-      note: 'Research papers are detailed for Intermediate & Expert readers.',
+      note: 'This is a curated Beginner Pick. The original arXiv paper is available whenever you are ready for the technical version.',
     };
   }
 

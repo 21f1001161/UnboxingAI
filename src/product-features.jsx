@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import './product-features.css';
-import { domainOf, ErrorState, ImportanceBadge, Notice, Skeleton, SourceCard, TagChips } from './components.jsx';
+import { domainOf, ErrorState, ImportanceBadge, Notice, Skeleton, SourceBadge, SourceCard, TagChips } from './components.jsx';
 import { useDigest, useResearch } from './store.jsx';
 
 /* ------------------------------------------------------------------ *
@@ -55,6 +55,7 @@ function ResearchPanel({ story, level, saved, toggleSave, open }) {
       <div className="detail-actions">
         <button onClick={() => open(story.id)}>{story.isResearch ? 'Unbox this paper →' : 'Unbox this story →'}</button>
         <button onClick={() => toggleSave(story.id)} className={isSaved ? 'is-saved' : ''}>{isSaved ? '★ Saved' : '☆ Save'}</button>
+        <a className="detail-primary-link" href={story.url} target="_blank" rel="noopener noreferrer">{story.isResearch ? 'Original paper' : 'Original source'} ↗</a>
       </div>
       <TagChips tags={story.tags} max={6} />
     </div>
@@ -168,6 +169,7 @@ export function ResearchHub({ level, saved, toggleSave, open, focusId, setFocusI
             <h2>{story.title}</h2>
             <p>{story.deck}</p>
             <div className="result-source">
+              <SourceBadge name={story.source} domain={domainOf(story.url)} emoji={story.sourceEmoji} className="visual-source-mark" />
               <span className="mini-avatar">{story.sourceEmoji || '◆'}</span>
               {story.source}
               <em>{domainOf(story.url)}</em>

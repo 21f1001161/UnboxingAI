@@ -90,14 +90,15 @@ export function DigestProvider({ level, children }) {
     const raw = digest.data?.stories || [];
     const adapted = decks.level === level ? decks.map : {};
 
-    // Beginner users will not be shown the research content
-    // Intermediate and Expert users will see research content with identical cards
     const isBeginner = level === 'Beginner';
+    // A short paper shelf gives beginners a purposeful first step into research
+    // without flooding their timeline with the complete technical feed.
+    const beginnerPaperIds = new Set(raw.filter(story => story.isResearch).slice(0, 6).map(story => story.id));
     const filteredRaw = isBeginner
-      ? raw.filter(story => !story.isResearch && story.category !== 'Research')
+      ? raw.filter(story => !story.isResearch || beginnerPaperIds.has(story.id)).map(story => story.isResearch ? { ...story, beginnerCurated: true } : story)
       : raw;
 
-    const researchStoriesCount = isBeginner ? 0 : raw.filter(s => s.isResearch || s.category === 'Research').length;
+    const researchStoriesCount = filteredRaw.filter(story => story.isResearch || story.category === 'Research').length;
 
     return {
       status: digest.status,

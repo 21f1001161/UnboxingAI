@@ -104,6 +104,25 @@ button.tag-chip:hover { background: #e2dcff; color: #5b4aa4; }
   margin-top: 16px;
 }
 .ghost-button:hover { border-color: #b7a9e4; background: #f4f1ff; }
+.primary-publication-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 2px;
+  padding: 9px 12px;
+  border: 1px solid #cfc5ef;
+  border-radius: 6px;
+  background: #f7f4ff;
+  color: #58469e;
+  font: 700 12px Manrope;
+  text-decoration: none;
+}
+.primary-publication-button:hover { border-color: #8d7aca; background: #eee9ff; }
+.primary-publication-button span { border-right: 1px solid #cfc5ef; padding-right: 8px; font: 700 10px 'DM Mono'; }
+.publication-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.publication-section-head h2 { margin-bottom: 0; }
+.publication-section-head a, .detail-primary-link { color: #6250ad; font: 700 11px Manrope; text-decoration: none; }
+.publication-section-head a:hover, .detail-primary-link:hover { text-decoration: underline; }
 
 .status { font: 600 12px 'DM Mono'; margin-left: auto; white-space: nowrap; }
 .status.ok { color: #5c8244; }
@@ -144,6 +163,33 @@ button.tag-chip:hover { background: #e2dcff; color: #5b4aa4; }
   font-family: 'DM Mono';
 }
 .source-card.is-primary .source-avatar { background: #e2dcff; color: #5b4aa4; }
+.source-badge {
+  flex: none;
+  min-width: 27px;
+  height: 27px;
+  padding: 0 5px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 9px/1 'DM Mono';
+  letter-spacing: -.5px;
+  color: #39413f;
+  background: #ecebe6;
+}
+.source-badge.arxiv { color: #b31b1b; background: #f9e4e2; }
+.source-badge.dair { color: #403094; background: #e8e1ff; }
+.source-badge.github { color: #fff; background: #24292f; }
+.source-badge.microsoft { color: #1175c4; background: #e2f0fb; }
+.source-badge.anthropic { color: #935d3d; background: #f4e5d8; }
+.source-badge.google { color: #3477d1; background: #e5efff; }
+.source-badge.openai { color: #fff; background: #263332; }
+.source-badge.techcrunch { color: #087a4e; background: #dcf3e8; }
+.source-badge.verge { color: #fff; background: #e64a57; }
+.source-badge.huggingface { color: #7b5b00; background: #fff0b4; }
+.source-card .source-avatar,
+.source-mini .mini-avatar,
+.result-source .mini-avatar { display: none; }
 .source-headline { font: 600 11px/1.45 Manrope; color: #2f3634; margin: 10px 0 0; }
 .source-snippet { font: 11px/1.55 Manrope; color: #6a726f; margin: 6px 0 0; }
 .source-card footer { display: flex; gap: 12px; align-items: center; margin-top: auto; padding-top: 12px; }
@@ -188,6 +234,8 @@ button.tag-chip:hover { background: #e2dcff; color: #5b4aa4; }
   font-size: 11px;
   flex: none;
 }
+.source-mini .visual-source-mark,
+.result-source .visual-source-mark { min-width: 20px; width: 20px; height: 20px; padding: 0 2px; border-radius: 5px; font-size: 7px; }
 
 .synthesis {
   display: flex;
@@ -400,6 +448,16 @@ button.tag-chip:hover { background: #e2dcff; color: #5b4aa4; }
   border-radius: 4px;
   padding: 2px 6px;
   width: fit-content;
+}
+.beginner-pick {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: #e6f4c7;
+  color: #577830;
+  font: 700 9px 'DM Mono';
+  letter-spacing: .45px;
 }
 
 .tag.research-tag {

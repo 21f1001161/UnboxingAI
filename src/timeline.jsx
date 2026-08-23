@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { domainOf, ErrorState, ImportanceBadge, Skeleton, TagChips } from './components.jsx';
+import { domainOf, ErrorState, ImportanceBadge, Skeleton, SourceBadge, TagChips } from './components.jsx';
 import { useDigest } from './store.jsx';
 
 /** Compact source chip-card used on timeline cards, in "card form" per source. */
 function SourceMini({ emoji, name, detail, url, onClick }) {
   const inner = <>
+    <SourceBadge name={name} domain={detail} emoji={emoji} className="visual-source-mark" />
     <span className="mini-avatar">{emoji || '◆'}</span>
     <div><strong>{name}</strong><small>{detail}</small></div>
   </>;
@@ -30,6 +31,7 @@ function StoryCard({ story, decksLoading, saved, toggleSave, open, explore, isNe
     <div className="story-body">
       <div className="story-top">
         <span className={`tag${story.isResearch ? ' research-tag' : ''}`}>{story.category}</span>
+        {story.beginnerCurated && <span className="beginner-pick">BEGINNER PICK</span>}
         <span className="read">{story.mins} min read</span>
         <span className="rank">#{story.rank} {story.isResearch ? 'paper' : 'this week'}</span>
       </div>
