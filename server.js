@@ -13,6 +13,10 @@ const app = express();
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = process.env.PORT || 3000;
 
+// Render (and most hosts) terminate HTTPS before forwarding requests to this
+// Node process. Trust that proxy so express-session can issue its secure cookie.
+app.set('trust proxy', 1);
+
 app.use(express.json());
 
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_CALLBACK_URL) {
